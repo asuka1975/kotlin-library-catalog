@@ -128,31 +128,83 @@ implementation(enforcedPlatform("com.github.asuka1975:kotlin-library-catalog:v1.
 ただしライブラリプロジェクトで `enforcedPlatform` を使うと、その利用者のバージョン選択まで
 強制してしまいます。通常は `platform(...)` を基本にしてください。
 
-## 他の BOM を取り込む
+## Spring Boot BOM の取り込みについて
 
-`build.gradle.kts` の `javaPlatform { allowDependencies() }` と `api(platform(...))` の
-コメントを外すと、既存の BOM をこの BOM に取り込めます。
+`javaPlatform { allowDependencies() }` を有効にして
+`spring-boot-dependencies` を import しているため、Spring / Jackson / Logback /
+JUnit など **Spring Boot が管理する 648 件がそのまま利用できます**。
 
 ```kotlin
-javaPlatform {
-    allowDependencies()
-}
+implementation("org.springframework.boot:spring-boot-starter-web")   // -> 4.1.0
+implementation("com.fasterxml.jackson.module:jackson-module-kotlin") // -> 2.21.4
+```
 
+Spring を使わないプロジェクトでも、Jackson などを使ったときに同じバージョンに揃います。
+
+### 衝突したときの挙動
+
+取り込んだ BOM と自前の `constraints` が同じライブラリを管理している場合、
+**Gradle は高い方を選びます**（Maven の `dependencyManagement` は先勝ちなので挙動が違います）。
+そのため、意図的に上書きするもの以外は重複させない方針にしています。
+
+| ライブラリ | 管理元 | 備考 |
+| --- | --- | --- |
+| `kotlinx-coroutines-*` | 自前 (1.11.0) | Spring Boot は 1.10.2。意図的に上書き |
+| `logback-classic` | Spring Boot (1.5.34) | ログ統合がバージョンに依存するため Spring Boot に委ねる |
+| `slf4j-api` | Spring Boot (2.0.18) | 値が同じなので重複を持たない |
+
+Spring Boot より新しいバージョンを使いたい場合は `constraints` に書き足せば上書きできます。
+逆に Spring Boot の検証済みの組み合わせを厳密に守りたい場合は、自前の constraints を消してください。
+
+## detekt / ktlint について
+
+**Gradle プラグインのバージョンはこの BOM では統一できません。**
+プラグインは buildscript / plugin classpath で解決され、そこはプロジェクトの
+依存関係とは別のため、`platform(...)` の影響を受けないからです。
+
+この BOM が効くのは、プロジェクトの依存として宣言するアーティファクトです。
+
+```kotlin
 dependencies {
-    api(platform("org.jetbrains.kotlin:kotlin-bom:2.4.10"))
+    implementation(platform("com.github.asuka1975:kotlin-library-catalog:v1.0.0"))
+
+    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting")  // -> 1.23.8
 }
+```
+
+プラグイン側のバージョンを揃えたい場合は、利用側の `settings.gradle.kts` で指定します。
+
+```kotlin
+pluginManagement {
+    plugins {
+        id("io.gitlab.arturbosch.detekt") version "1.23.8"
+        id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
+    }
+}
+```
+
+こうしておくと、各 `build.gradle.kts` では `id("io.gitlab.arturbosch.detekt")` と
+バージョンなしで書けます。
+
+## 他の BOM を取り込む
+
+`build.gradle.kts` の `dependencies` に追加します（`allowDependencies()` は設定済み）。
+
+```kotlin
+api(platform("org.jetbrains.kotlin:kotlin-bom:2.4.10"))
 ```
 
 ## 管理しているライブラリ
 
 | ライブラリ | バージョン |
 | --- | --- |
+| `org.springframework.boot:spring-boot-dependencies`（BOM import） | 4.1.0 |
 | `org.jetbrains.kotlinx:kotlinx-coroutines-core` / `-test` | 1.11.0 |
 | `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.11.0 |
 | `org.jetbrains.kotlinx:kotlinx-datetime` | 0.8.0 |
 | `io.ktor:ktor-client-core` / `-cio` / `-content-negotiation` / `ktor-serialization-kotlinx-json` | 3.5.1 |
 | `io.kotest:kotest-runner-junit5` / `-assertions-core` / `-property` | 6.2.3 |
 | `io.mockk:mockk` | 1.14.11 |
+| `io.gitlab.arturbosch.detekt:detekt-formatting` / `-api` / `-cli` | 1.23.8 |
+| `com.pinterest.ktlint:ktlint-cli` / `-rule-engine` / `-ruleset-standard` | 1.8.0 |
 | `io.github.oshai:kotlin-logging` | 8.0.4 |
-| `ch.qos.logback:logback-classic` | 1.6.0 |
-| `org.slf4j:slf4j-api` | 2.0.18 |

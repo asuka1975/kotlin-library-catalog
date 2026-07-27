@@ -15,6 +15,9 @@ updates:
     # 1 つ更新すると同じ val を使う全てが動く。PR が衝突しないよう
     # バージョンを共有する単位でまとめる。
     groups:
+      spring-boot:
+        patterns:
+          - "org.springframework.boot:*"
       kotlinx:
         patterns:
           - "org.jetbrains.kotlinx:*"
@@ -24,8 +27,12 @@ updates:
       kotest:
         patterns:
           - "io.kotest:*"
+      detekt:
+        patterns:
+          - "io.gitlab.arturbosch.detekt:*"
+      ktlint:
+        patterns:
+          - "com.pinterest.ktlint:*"
       logging:
         patterns:
-          - "ch.qos.logback:*"
-          - "org.slf4j:*"
           - "io.github.oshai:*"
