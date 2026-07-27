@@ -1,0 +1,9 @@
+.gradle/
+build/
+*/build/
+
+# gradle/wrapper/gradle-wrapper.jar は JitPack が使うので必ずコミットする
+
+.idea/
+*.iml
+.DS_Store

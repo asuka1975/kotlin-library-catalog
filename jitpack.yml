@@ -1,0 +1,10 @@
+jdk:
+  - openjdk21
+
+# JitPack は maven-publish が有効なプロジェクトに対して
+#   ./gradlew build publishToMavenLocal
+# を実行します。上の jdk 指定が使えない場合は、代わりに以下を使ってください。
+#
+# before_install:
+#   - sdk install java 21.0.5-tem
+#   - sdk use java 21.0.5-tem
