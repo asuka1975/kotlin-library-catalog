@@ -58,7 +58,7 @@ Gradle Wrapper 自体は Dependabot の対象外です。更新するには次�
 生成された `dependencyManagement` は次で確認できます。
 
 ```bash
-cat ~/.m2/repository/com/github/asuka1975/kotlin-library-catalog/1.0.0-SNAPSHOT/kotlin-library-catalog-1.0.0-SNAPSHOT.pom
+cat ~/.m2/repository/com/github/asuka1975/kotlin-library-catalog/1.0.0/kotlin-library-catalog-1.0.0.pom
 ```
 
 ## GitHub / JitPack で公開する
@@ -79,7 +79,7 @@ https://jitpack.io でリポジトリを Look up すると、JitPack が
 
 | | 座標 |
 | --- | --- |
-| ローカル (`mavenLocal`) | `com.github.asuka1975:kotlin-library-catalog:1.0.0-SNAPSHOT` |
+| ローカル (`mavenLocal`) | `com.github.asuka1975:kotlin-library-catalog:1.0.0` |
 | JitPack | `com.github.asuka1975:kotlin-library-catalog:v1.0.0` |
 
 `group` / `version` は `gradle.properties` の値が使われ、JitPack 上では JitPack が
