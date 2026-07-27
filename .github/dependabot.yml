@@ -1,0 +1,31 @@
+version: 2
+
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+    # build.gradle.kts の val でバージョンを共有しているライブラリは、
+    # 1 つ更新すると同じ val を使う全てが動く。PR が衝突しないよう
+    # バージョンを共有する単位でまとめる。
+    groups:
+      kotlinx:
+        patterns:
+          - "org.jetbrains.kotlinx:*"
+      ktor:
+        patterns:
+          - "io.ktor:*"
+      kotest:
+        patterns:
+          - "io.kotest:*"
+      logging:
+        patterns:
+          - "ch.qos.logback:*"
+          - "org.slf4j:*"
+          - "io.github.oshai:*"

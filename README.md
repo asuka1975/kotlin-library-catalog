@@ -34,6 +34,21 @@ constraints {
 val ktor = "3.5.1"
 ```
 
+## Dependabot
+
+`.github/dependabot.yml` を置いてあります。GitHub に push すると、毎週月曜に
+`build.gradle.kts` の `constraints` を走査して更新 PR を作ります。
+
+`val ktor = "3.5.1"` のようにバージョンを共有しているものは 1 つ更新すると
+同じ `val` を使う全てが動くため、PR が衝突しないよう `groups` でまとめてあります。
+共有バージョンのライブラリを追加したときは `groups` にも `patterns` を足してください。
+
+Gradle Wrapper 自体は Dependabot の対象外です。更新するには次を実行します。
+
+```bash
+./gradlew wrapper --gradle-version <version>
+```
+
 ## ローカルで確認する
 
 ```bash
