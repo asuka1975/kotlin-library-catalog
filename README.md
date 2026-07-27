@@ -141,20 +141,25 @@ implementation("com.fasterxml.jackson.module:jackson-module-kotlin") // -> 2.21.
 
 Spring を使わないプロジェクトでも、Jackson などを使ったときに同じバージョンに揃います。
 
+Kotlin 関連も Spring Boot が BOM を import しているため、そちらの管理下になります。
+
+| Spring Boot が import している BOM | バージョン | 対象 |
+| --- | --- | --- |
+| `org.jetbrains.kotlin:kotlin-bom` | 2.3.21 | `kotlin-stdlib` / `kotlin-reflect` など |
+| `org.jetbrains.kotlinx:kotlinx-coroutines-bom` | 1.10.2 | `-core` / `-test` / `-reactor` など 17 件 |
+| `org.jetbrains.kotlinx:kotlinx-serialization-bom` | 1.11.0 | `-json` / `-core` / `-protobuf` など 15 件 |
+
+`kotlinx-datetime` だけは Spring Boot の管理対象外なので、この BOM で指定しています。
+
 ### 衝突したときの挙動
 
-取り込んだ BOM と自前の `constraints` が同じライブラリを管理している場合、
+取り込んだ BOM と自前の `constraints` が同じライブラリを管理していると、
 **Gradle は高い方を選びます**（Maven の `dependencyManagement` は先勝ちなので挙動が違います）。
-そのため、意図的に上書きするもの以外は重複させない方針にしています。
+自前の値が Spring Boot の検証済みの組み合わせを黙って上書きしてしまうため、
+Spring Boot が管理しているものは重複して書かない方針にしています。
 
-| ライブラリ | 管理元 | 備考 |
-| --- | --- | --- |
-| `kotlinx-coroutines-*` | 自前 (1.11.0) | Spring Boot は 1.10.2。意図的に上書き |
-| `logback-classic` | Spring Boot (1.5.34) | ログ統合がバージョンに依存するため Spring Boot に委ねる |
-| `slf4j-api` | Spring Boot (2.0.18) | 値が同じなので重複を持たない |
-
-Spring Boot より新しいバージョンを使いたい場合は `constraints` に書き足せば上書きできます。
-逆に Spring Boot の検証済みの組み合わせを厳密に守りたい場合は、自前の constraints を消してください。
+意図的に上書きしたい場合だけ `constraints` に書き足してください。その際は
+Spring Boot 側のバージョンより高いことを確認してください（低いと Gradle 側では効きません）。
 
 ## detekt / ktlint について
 
@@ -199,8 +204,6 @@ api(platform("org.jetbrains.kotlin:kotlin-bom:2.4.10"))
 | ライブラリ | バージョン |
 | --- | --- |
 | `org.springframework.boot:spring-boot-dependencies`（BOM import） | 4.1.0 |
-| `org.jetbrains.kotlinx:kotlinx-coroutines-core` / `-test` | 1.11.0 |
-| `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.11.0 |
 | `org.jetbrains.kotlinx:kotlinx-datetime` | 0.8.0 |
 | `io.ktor:ktor-client-core` / `-cio` / `-content-negotiation` / `ktor-serialization-kotlinx-json` | 3.5.1 |
 | `io.kotest:kotest-runner-junit5` / `-assertions-core` / `-property` | 6.2.3 |

@@ -10,8 +10,6 @@ System.getenv("VERSION")?.takeIf { it.isNotBlank() }?.let { version = it }
 
 // バージョンを共有するライブラリ群
 val springBoot = "4.1.0"
-val coroutines = "1.11.0"
-val serialization = "1.11.0"
 val ktor = "3.5.1"
 val kotest = "6.2.3"
 val detekt = "1.23.8"
@@ -31,10 +29,9 @@ dependencies {
     // 依存として追加されるわけではないので、使わないものが混ざっていても害はありません。
     constraints {
         // Kotlin 公式ライブラリ
-        // Spring Boot は coroutines 1.10.2 を管理しているが、ここで意図的に上書きする
-        api("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines")
-        api("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutines")
-        api("org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization")
+        // kotlin / kotlinx-coroutines / kotlinx-serialization は Spring Boot が
+        // それぞれの BOM を import しているので、そちらの管理に任せる。
+        // kotlinx-datetime は Spring Boot の管理対象外なのでここで指定する。
         api("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
 
         // Ktor
