@@ -43,11 +43,22 @@ val ktor = "3.5.1"
 同じ `val` を使う全てが動くため、PR が衝突しないよう `groups` でまとめてあります。
 共有バージョンのライブラリを追加したときは `groups` にも `patterns` を足してください。
 
-Gradle Wrapper 自体は Dependabot の対象外です。更新するには次を実行します。
+Gradle Wrapper も `gradle` エコシステムの対象で、Dependabot が更新 PR を出します。
+
+手動で更新する場合は次のようにします。`wrapper` タスクを 2 回実行するのは、
+1 回目では `gradle-wrapper.properties` しか更新されず、`gradlew` と
+`gradle-wrapper.jar` が古いまま残るためです。
 
 ```bash
-./gradlew wrapper --gradle-version <version>
+SUM=$(curl -sSL https://services.gradle.org/distributions/gradle-<version>-bin.zip.sha256)
+./gradlew wrapper --gradle-version <version> --gradle-distribution-sha256-sum "$SUM"
+./gradlew wrapper --gradle-version <version> --gradle-distribution-sha256-sum "$SUM"
 ```
+
+`distributionSha256Sum` を入れておくと、配布物が差し替わったときにビルドが失敗します。
+値を間違えると新規クローンと JitPack のビルドが全部壊れるので、更新後は
+`~/.gradle/wrapper/dists/gradle-<version>-bin` を消して再ダウンロードさせ、
+検証が通ることを確認してください。
 
 ## ローカルで確認する
 
