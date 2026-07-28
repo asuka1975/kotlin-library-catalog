@@ -51,7 +51,7 @@ def main():
 
     major, minor, patch = (int(p) for p in current.split("."))
     nxt = f"{major}.{minor}.{patch + 1}"
-    tag = f"v{nxt}"
+    tag = nxt  # タグ名は version と同一（v は付けない）
 
     local = subprocess.run(["git", "tag", "--list", tag],
                            capture_output=True, text=True, cwd=ROOT).stdout.strip()

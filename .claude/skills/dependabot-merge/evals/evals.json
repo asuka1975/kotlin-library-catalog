@@ -10,7 +10,7 @@
         "PR #12 (ktlint 1.8.0) がマージされている",
         "build.gradle.kts に両方の更新が反映されている",
         "gradle.properties の version が 1.0.1",
-        "タグ v1.0.1 が origin に存在する",
+        "タグ 1.0.1 が origin に存在する",
         "バージョンアップのコミットログにレビュー記録が残っている",
         "コミットログに脆弱性照合の結果が書かれている",
         "gradle.properties と build.gradle.kts 以外を変更していない"
@@ -29,7 +29,7 @@
         "コミットログに snakeyaml を保留した理由が残っている",
         "コミットログに確認できなかったことが書かれている（snakeyaml は上流が bitbucket で compare 不可）",
         "gradle.properties の version が 1.0.1",
-        "タグ v1.0.1 が origin に存在する",
+        "タグ 1.0.1 が origin に存在する",
         "gradle.properties と build.gradle.kts 以外を変更していない"
       ],
       "files": []
@@ -47,7 +47,7 @@
         "競合解消で先行マージ分を巻き戻していない（kotest 6.2.3 と ktor 3.5.1 が両方 main にある）",
         "コミットログにメジャーアップを保留した理由が残っている",
         "gradle.properties の version が 1.0.1",
-        "タグ v1.0.1 が origin に存在する",
+        "タグ 1.0.1 が origin に存在する",
         "gradle.properties と build.gradle.kts 以外を変更していない"
       ],
       "files": []

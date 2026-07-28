@@ -69,21 +69,23 @@ Gradle Wrapper を含めてコミットし、タグを打ちます。
 git add -A && git commit -m "Initial BOM"
 git remote add origin git@github.com:asuka1975/kotlin-library-catalog.git
 git push -u origin main
-git tag v1.0.0 && git push origin v1.0.0
+git tag 1.0.0 && git push origin 1.0.0
 ```
 
 https://jitpack.io でリポジトリを Look up すると、JitPack が
 `./gradlew build publishToMavenLocal` を実行して公開します。
 
-座標はローカル発行時と JitPack で同じ形になります。
+タグ名は `gradle.properties` の `version` と同じ値にします（`v` は付けません）。
+こうしておくと、ローカル発行でも JitPack でも座標が一致します。
 
-| | 座標 |
-| --- | --- |
-| ローカル (`mavenLocal`) | `com.github.asuka1975:kotlin-library-catalog:1.0.0` |
-| JitPack | `com.github.asuka1975:kotlin-library-catalog:v1.0.0` |
+```
+com.github.asuka1975:kotlin-library-catalog:1.0.0
+```
 
 `group` / `version` は `gradle.properties` の値が使われ、JitPack 上では JitPack が
-注入する `GROUP` / `VERSION` 環境変数で上書きされます。
+注入する `GROUP` / `VERSION` 環境変数で上書きされます。JitPack の `VERSION` は
+タグ名そのものなので、タグに `v` を付けると発行されるバージョンだけ `v1.0.0` に
+なってしまい、`gradle.properties` と食い違います。
 
 ## 利用側の設定
 
@@ -102,7 +104,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation(platform("com.github.asuka1975:kotlin-library-catalog:v1.0.0"))
+    implementation(platform("com.github.asuka1975:kotlin-library-catalog:1.0.0"))
 
     // バージョンを書かない
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
@@ -113,7 +115,7 @@ dependencies {
 }
 ```
 
-BOM 自体のバージョン（`v1.0.0`）は省略できません。
+BOM 自体のバージョン（`1.0.0`）は省略できません。
 
 ### バージョンを強制したい場合
 
@@ -122,7 +124,7 @@ BOM 自体のバージョン（`v1.0.0`）は省略できません。
 を使います。
 
 ```kotlin
-implementation(enforcedPlatform("com.github.asuka1975:kotlin-library-catalog:v1.0.0"))
+implementation(enforcedPlatform("com.github.asuka1975:kotlin-library-catalog:1.0.0"))
 ```
 
 ただしライブラリプロジェクトで `enforcedPlatform` を使うと、その利用者のバージョン選択まで
@@ -171,7 +173,7 @@ Spring Boot 側のバージョンより高いことを確認してください�
 
 ```kotlin
 dependencies {
-    implementation(platform("com.github.asuka1975:kotlin-library-catalog:v1.0.0"))
+    implementation(platform("com.github.asuka1975:kotlin-library-catalog:1.0.0"))
 
     detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting")  // -> 1.23.8
 }

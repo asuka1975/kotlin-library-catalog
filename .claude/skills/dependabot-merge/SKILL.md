@@ -205,9 +205,9 @@ EOF
 
 git add gradle.properties
 git commit -F /tmp/release-notes.txt
-git tag v<新バージョン>
+git tag <新バージョン>
 git push origin main
-git push origin v<新バージョン>
+git push origin <新バージョン>
 ```
 
 各サブエージェントが返した DETAIL をそのまま貼るのではなく、表の 1 行に畳んでください。
