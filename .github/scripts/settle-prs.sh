@@ -55,7 +55,7 @@ read_verdict() {
     jq -n --argjson pr "$pr" '{
       pr: $pr, verdict: "ERROR",
       reason: "レビュー結果を取得できなかった",
-      updates: "", checked: "",
+      updates: "", checked: "", notes: "",
       unverified: ["レビュー自体が完了していないため、脆弱性・上流差分ともに未確認"]
     }'
     return
@@ -64,6 +64,7 @@ read_verdict() {
     pr: $pr,
     verdict: (if (.verdict == "MERGE" or .verdict == "HOLD") then .verdict else "ERROR" end),
     reason: (.reason // ""), updates: (.updates // ""), checked: (.checked // ""),
+    notes: (.notes // ""),
     unverified: (.unverified // [])
   }' "$file"
 }

@@ -177,6 +177,7 @@ jobs:
                   "reason": "評決を JSON として取り出せなかった",
                   "updates": "",
                   "checked": "",
+                  "notes": "",
                   "unverified": ["レビューが完了せず、脆弱性・上流差分ともに未確認"],
               }
 
@@ -185,7 +186,7 @@ jobs:
           def flatten(v):
               return " ".join(str(v).split()).strip(" 、,")
 
-          for key in ("reason", "updates", "checked"):
+          for key in ("reason", "updates", "checked", "notes"):
               data[key] = flatten(data.get(key, ""))
           data["unverified"] = [flatten(u) for u in (data.get("unverified") or []) if flatten(u)]
 

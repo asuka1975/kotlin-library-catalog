@@ -57,7 +57,11 @@ def main():
         updates = r.get("updates") or r.get("title") or ""
 
         if r.get("outcome") == "merged":
-            merged.append([pr, updates, r.get("checked", "")])
+            # notes はセキュリティ以外の気づき（破壊的変更など）。マージの判断には
+            # 使っていないが、利用側が知るべきことなので確認欄に併記する。
+            checked = r.get("checked", "")
+            notes = r.get("notes", "")
+            merged.append([pr, updates, f"{checked} ／ 注意: {notes}" if notes else checked])
         else:
             reason = r.get("reason", "")
             suffix = HELD_OUTCOME_SUFFIX.get(r.get("outcome"), "")
