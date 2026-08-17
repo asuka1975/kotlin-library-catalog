@@ -60,6 +60,40 @@ SUM=$(curl -sSL https://services.gradle.org/distributions/gradle-<version>-bin.z
 `~/.gradle/wrapper/dists/gradle-<version>-bin` を消して再ダウンロードさせ、
 検証が通ることを確認してください。
 
+## 更新 PR の自動レビューとリリース
+
+`.github/workflows/dependabot-review-release.yml` が **毎週火曜 00:00 (JST)** に動きます。
+Dependabot が月曜 09:00 に PR を作る 15 時間後です（GitHub の cron は UTC 固定なので、
+ファイル上は `0 15 * * 1` と書いてあります）。
+
+開いている Dependabot PR ごとに、Sakana Fugu の `fugu-cyber` を `codex-fugu` 経由で走らせ、
+既知の脆弱性・上流のリリースノート・上流のタグ間差分を確認させます。評決が `MERGE` なら
+ブランチをビルドしてからマージ、`HOLD` なら理由をコメントしてクローズします。1 件でも
+マージできたらパッチバージョンを上げ、レビュー内容をコミットメッセージに入れてタグを
+push します（タグを push して初めて JitPack がビルドします）。
+
+レビューするモデルには**書き込み権限を渡していません**。モデルが読むのは PR 本文に
+埋め込まれた上流のリリースノート、つまり第三者が書ける文章です。それを読んだ
+エージェント自身がマージまでできると、このワークフローが防ごうとしている攻撃が
+そのまま通ります。ジョブを分け、レビュー側のトークンを読み取り専用にしてあります。
+
+動かすのに必要な設定は次の 2 つです。
+
+- リポジトリの Secrets に `SAKANA_API_KEY` を登録する
+- Settings > Actions > General > Workflow permissions が
+  「Read repository contents and packages permissions」に絞られていないこと
+  （ワークフロー側で `permissions:` を宣言しているので、この既定値のままで動きます。
+  組織ポリシーで write を禁止している場合はタグ push が落ちます）
+
+`main` にブランチ保護をかけている場合、リリースコミットの push が拒否されます。
+bot を除外するか、保護を外してください。
+
+手を入れたら Actions タブから手動実行できます。`dry_run` は既定で `true` で、
+レビューとビルド確認だけを行い、マージ・クローズ・タグ push はしません。
+
+評決が取れなかった PR（API 障害、出力が壊れた、ジョブが落ちた）は**触りません**。
+「調べていない」は「問題なし」ではないので、open のまま残して次回に回します。
+
 ## ローカルで確認する
 
 ```bash

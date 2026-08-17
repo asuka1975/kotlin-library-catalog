@@ -1,0 +1,293 @@
+name: Dependabot review and release
+
+# Dependabot が出した更新 PR を fugu-cyber にレビューさせ、問題なければマージ、
+# 問題があればクローズし、全部片付いたら README.md の手順でリリースする。
+#
+# 権限の配り方がこのワークフローの要点。レビューするモデルが読むのは PR 本文に
+# 埋め込まれた上流のリリースノート、つまり攻撃者が書ける文章である。それを読んだ
+# エージェント自身がマージまでできると、このワークフローが防ごうとしている攻撃が
+# そのまま通る。だから review ジョブのトークンは読み取り専用にし、マージ・クローズ・
+# タグ push は評決 JSON を受け取った apply ジョブの側で行う。
+
+on:
+  schedule:
+    # 火曜 00:00 JST。GitHub の cron は UTC 固定なので月曜 15:00 UTC と書く。
+    # Dependabot は月曜 09:00 JST に PR を作る（.github/dependabot.yml）ので、その 15 時間後。
+    - cron: "0 15 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "レビューとビルド確認だけ行い、マージ・クローズ・リリースはしない"
+        type: boolean
+        default: true
+
+# 既定は何も許可しない。必要な権限はジョブごとに与える。
+permissions: {}
+
+concurrency:
+  group: dependabot-review-release
+  cancel-in-progress: false
+
+env:
+  FUGU_MODEL: fugu-cyber
+
+jobs:
+  collect:
+    name: 対象の PR を集める
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      prs: ${{ steps.list.outputs.prs }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: 開いている Dependabot PR を列挙する
+        id: list
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr list --repo "$GITHUB_REPOSITORY" --author "app/dependabot" \
+            --state open --limit 50 \
+            --json number,title,url,headRefName > prs.json
+
+          count=$(jq length prs.json)
+          {
+            echo "count=$count"
+            echo "prs=$(jq -c '[.[].number]' prs.json)"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 対象の PR: ${count} 件"
+            echo
+            jq -r '.[] | "- [#\(.number)](\(.url)) \(.title)"' prs.json
+            [ "$count" -eq 0 ] && echo "更新 PR はありません。バージョンも上げません。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prs
+          path: prs.json
+
+  review:
+    name: "#${{ matrix.pr }} を fugu-cyber でレビュー"
+    needs: collect
+    if: needs.collect.outputs.count != '0'
+    runs-on: ubuntu-latest
+    # 読み取り専用。モデルがマージ・コメント・push を試みても失敗する。
+    permissions:
+      contents: read
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        pr: ${{ fromJSON(needs.collect.outputs.prs) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # チェックアウトが git config に残す資格情報も渡さない
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: codex-fugu を入れる
+        env:
+          SAKANA_API_KEY: ${{ secrets.SAKANA_API_KEY }}
+          FUGU_INSTALL_TARGET: codex
+        run: |
+          set -euo pipefail
+          npm install -g @openai/codex
+          # インストーラが ~/.codex/config.toml に Sakana のプロバイダ設定を書き、
+          # codex -p fugu を呼ぶ codex-fugu ランチャを置く。--yes で非対話。
+          curl -fsSL https://sakana.ai/fugu/install | bash -s -- --yes
+          codex-fugu --status
+
+      - name: レビューする
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SAKANA_API_KEY: ${{ secrets.SAKANA_API_KEY }}
+          PR_NUMBER: ${{ matrix.pr }}
+          CODEX_FUGU_NO_UPDATE: "1"
+        run: |
+          set -uo pipefail
+          mkdir -p verdicts
+
+          python3 - > prompt.txt <<'PY'
+          import os, pathlib
+          t = pathlib.Path(".github/scripts/review-prompt.md").read_text(encoding="utf-8")
+          print(t.replace("{{PR_NUMBER}}", os.environ["PR_NUMBER"])
+                 .replace("{{REPO}}", os.environ["GITHUB_REPOSITORY"]))
+          PY
+
+          # サンドボックスを開けているのは、上流の advisory / リリース / タグ間差分を
+          # 引くのにネットワークと gh が要るため。ランナーは使い捨てで、このジョブの
+          # トークンは読み取り専用なので、開けても書き換えられるものが無い。
+          codex-fugu exec \
+            --model "$FUGU_MODEL" \
+            --sandbox danger-full-access \
+            --output-schema .github/scripts/verdict-schema.json \
+            --output-last-message raw-verdict.txt \
+            - < prompt.txt
+
+          # 評決が取れなかったときは ERROR にする。ERROR は「調べていない」であって
+          # 「問題なし」ではないので、apply ジョブはその PR に触れない。
+          python3 - "$PR_NUMBER" raw-verdict.txt "verdicts/${PR_NUMBER}.json" <<'PY'
+          import json, re, sys
+
+          pr, src, dst = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+          try:
+              text = open(src, encoding="utf-8").read()
+          except OSError:
+              text = ""
+
+          data = None
+          for candidate in (text.strip(), *(m.group(0) for m in re.finditer(r"\{.*\}", text, re.S))):
+              try:
+                  data = json.loads(candidate)
+                  break
+              except (json.JSONDecodeError, ValueError):
+                  continue
+
+          if not isinstance(data, dict) or data.get("verdict") not in ("MERGE", "HOLD"):
+              data = {
+                  "verdict": "ERROR",
+                  "reason": "評決を JSON として取り出せなかった",
+                  "updates": "",
+                  "checked": "",
+                  "unverified": ["レビューが完了せず、脆弱性・上流差分ともに未確認"],
+              }
+
+          data["pr"] = pr  # モデルの申告ではなく、ジョブが知っている番号を使う
+          with open(dst, "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+          print(json.dumps(data, ensure_ascii=False, indent=2))
+          PY
+
+          {
+            echo "## #${PR_NUMBER}"
+            echo
+            echo '```json'
+            cat "verdicts/${PR_NUMBER}.json"
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # 評決が取れなかったことは緑で流さない。apply ジョブは always() で動くので、
+          # ここで落としても他の PR の処理は止まらない。
+          if [ "$(jq -r .verdict "verdicts/${PR_NUMBER}.json")" = "ERROR" ]; then
+            echo "::error::#${PR_NUMBER} の評決を取得できなかった。この PR には触らない。"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verdict-${{ matrix.pr }}
+          path: verdicts/
+
+  apply:
+    name: マージ・クローズしてリリースする
+    needs: [collect, review]
+    # review が 1 件失敗しても残りは片付ける。失敗した PR は評決が無いので触られない。
+    if: always() && needs.collect.result == 'success' && needs.collect.outputs.count != '0'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          # next-version.py がタグの重複を見るので、履歴とタグを全部持ってくる
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: verdict-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prs
+
+      - name: 前提を確認する
+        run: |
+          set -euo pipefail
+          # 作業ツリーが汚れている / main にいない、のどちらかなら片付けようとせず止まる。
+          # マージとタグ push は取り消しが面倒なので、前提が崩れたまま進める価値はない。
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse --abbrev-ref HEAD)" = main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: 評決に従って PR を片付ける
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: bash .github/scripts/settle-prs.sh
+
+      - name: バージョンを上げてタグを打つ
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          merged=$(jq -s '[.[] | select(.outcome == "merged")] | length' results.jsonl)
+          if [ "$merged" -eq 0 ]; then
+            echo "マージできた PR が無いので、上げるものが無い。バージョンは据え置く。" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git pull --ff-only origin main
+
+          # パッチ +1、タグ名、-SNAPSHOT の混入チェック、タグの重複チェックは
+          # このスクリプトが行う。手で計算しないこと。
+          python3 .claude/skills/dependabot-merge/scripts/next-version.py --apply | tee version.txt
+          version=$(sed -n 's/^next=//p' version.txt)
+          tag=$(sed -n 's/^tag=//p' version.txt)
+
+          # BOM は POM が全てなので、生成物を見るのが唯一の検証
+          ./gradlew --no-daemon build publishToMavenLocal
+
+          python3 .github/scripts/build-release-notes.py \
+            --results results.jsonl --version "$version" --out release-notes.txt
+
+          git add gradle.properties
+          git commit -F release-notes.txt
+          git tag "$tag"
+          git push origin main
+          git push origin "$tag"
+
+          {
+            echo "## リリース: ${tag}"
+            echo
+            echo "タグを push したので JitPack がビルドする。"
+            echo
+            echo '```'
+            cat release-notes.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: run-record
+          path: |
+            results.jsonl
+            release-notes.txt
+          if-no-files-found: warn

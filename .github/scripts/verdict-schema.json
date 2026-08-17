@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pr", "verdict", "reason", "updates", "checked", "unverified"],
+  "properties": {
+    "pr": {
+      "type": "integer",
+      "description": "レビュー対象の PR 番号"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["MERGE", "HOLD"],
+      "description": "MERGE ならマージしてよい。迷ったら HOLD。"
+    },
+    "reason": {
+      "type": "string",
+      "description": "判断理由。1 行。コミットログの表にそのまま入る。"
+    },
+    "updates": {
+      "type": "string",
+      "description": "更新内容の要約。例: ktor 3.5.1 -> 3.6.0 (4 件)"
+    },
+    "checked": {
+      "type": "string",
+      "description": "確認したことの要約。1 行。例: 脆弱性なし / 破壊的変更なし / 上流差分 42 commits・不審な変更なし"
+    },
+    "unverified": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "確認できなかったこと。無ければ空配列。「確認した」と書かずにここへ入れる。"
+    }
+  }
+}
