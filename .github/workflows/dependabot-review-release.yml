@@ -1,7 +1,9 @@
 name: Dependabot review and release
 
-# Dependabot が出した更新 PR を fugu-cyber にレビューさせ、問題なければマージ、
+# Dependabot が出した更新 PR を Sakana Fugu にレビューさせ、問題なければマージ、
 # 問題があればクローズし、全部片付いたら README.md の手順でリリースする。
+# モデルは下の FUGU_MODEL 一箇所で決まり、PR コメントとリリースコミットの記録にも
+# そこから流れる。切り替えるときは FUGU_MODEL だけ書き換えればよい。
 #
 # 権限の配り方がこのワークフローの要点。レビューするモデルが読むのは PR 本文に
 # 埋め込まれた上流のリリースノート、つまり攻撃者が書ける文章である。それを読んだ
@@ -29,7 +31,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FUGU_MODEL: fugu-cyber
+  # fugu-cyber は従量課金なので使わない。セキュリティ特化ではないぶん、
+  # レビュー手順は .github/scripts/review-prompt.md 側で明示的に指示している。
+  FUGU_MODEL: fugu-ultra-v1.1
 
 jobs:
   collect:
@@ -80,7 +84,8 @@ jobs:
           path: prs.json
 
   review:
-    name: "#${{ matrix.pr }} を fugu-cyber でレビュー"
+    # ジョブ名には env コンテキストを書けないので、モデル名はステップのログに出す
+    name: "#${{ matrix.pr }} をレビュー"
     needs: collect
     if: needs.collect.outputs.count != '0'
     runs-on: ubuntu-latest
@@ -127,6 +132,7 @@ jobs:
           # 残る。codex が落ちたときこそ後段の ERROR フォールバックまで進めたいので、
           # ここだけは切る。ステップの成否は最後の if で自分で決める。
           set +e
+          echo "model: ${FUGU_MODEL}"
           mkdir -p verdicts
 
           python3 - > prompt.txt <<'PY'
@@ -286,7 +292,8 @@ jobs:
           ./gradlew --no-daemon build publishToMavenLocal
 
           python3 .github/scripts/build-release-notes.py \
-            --results results.jsonl --version "$version" --out release-notes.txt
+            --results results.jsonl --version "$version" --model "$FUGU_MODEL" \
+            --out release-notes.txt
 
           git add gradle.properties
           git commit -F release-notes.txt

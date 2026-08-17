@@ -13,9 +13,8 @@ usage:
 """
 import argparse
 import json
+import os
 import sys
-
-MODEL_NOTE = "レビューは codex-fugu (fugu-cyber) が PR ごとに実行しました。"
 
 HELD_OUTCOME_SUFFIX = {
     "closed": "（クローズ済み）",
@@ -43,6 +42,9 @@ def main():
     ap.add_argument("--results", required=True)
     ap.add_argument("--version", required=True)
     ap.add_argument("--out", required=True)
+    # どのモデルが判断したかは記録の一部。後からモデルを変えたとき、過去のコミットが
+    # 何にレビューされたのか分からなくなるので、実際に使った名前をそのまま残す。
+    ap.add_argument("--model", default=os.environ.get("FUGU_MODEL", "Fugu"))
     args = ap.parse_args()
 
     with open(args.results, encoding="utf-8") as f:
@@ -84,7 +86,7 @@ def main():
         "",
         "\n".join(unverified) if unverified else "なし",
         "",
-        MODEL_NOTE,
+        f"レビューは codex-fugu ({args.model}) が PR ごとに実行しました。",
         "",
     ])
 
