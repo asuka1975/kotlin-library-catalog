@@ -238,8 +238,20 @@ jobs:
           set -euo pipefail
           # 作業ツリーが汚れている / main にいない、のどちらかなら片付けようとせず止まる。
           # マージとタグ push は取り消しが面倒なので、前提が崩れたまま進める価値はない。
-          test -z "$(git status --porcelain)"
-          test "$(git rev-parse --abbrev-ref HEAD)" = main
+          #
+          # --untracked-files=no を付けているのは、直前の download-artifact が prs.json と
+          # artifacts/ を untracked で置くため。見たいのは追跡済みファイルが書き換わって
+          # いないかどうかで、成果物の有無ではない。
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "::error::作業ツリーが汚れている。マージとタグ push は行わない。"
+            git status --short
+            exit 1
+          fi
+          branch=$(git rev-parse --abbrev-ref HEAD)
+          if [ "$branch" != main ]; then
+            echo "::error::main にいない (${branch})。マージとタグ push は行わない。"
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
