@@ -180,6 +180,15 @@ jobs:
                   "unverified": ["レビューが完了せず、脆弱性・上流差分ともに未確認"],
               }
 
+          # 改行やタブが残っていると、PR コメントでも Markdown の表でも崩れる。
+          # 中身の良し悪しはここでは判断せず、形だけ整える。
+          def flatten(v):
+              return " ".join(str(v).split()).strip(" 、,")
+
+          for key in ("reason", "updates", "checked"):
+              data[key] = flatten(data.get(key, ""))
+          data["unverified"] = [flatten(u) for u in (data.get("unverified") or []) if flatten(u)]
+
           data["pr"] = pr  # モデルの申告ではなく、ジョブが知っている番号を使う
           with open(dst, "w", encoding="utf-8") as f:
               json.dump(data, f, ensure_ascii=False, indent=2)

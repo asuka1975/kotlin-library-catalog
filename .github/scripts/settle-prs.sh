@@ -31,6 +31,21 @@ POLL_ATTEMPTS=${POLL_ATTEMPTS:-20}
 
 log() { printf '%s\n' "$*"; }
 
+# クローズ理由のコメントを組み立てる。理由はモデルが書いた文字列なので、長すぎるときは
+# 切る。読む人にとってこれは通知であって記録ではない。全文は評決アーティファクトと
+# リリースコミットに残るので、実行へのリンクを添えて追えるようにしておく。
+close_comment() {
+  local reason=$1 body link=""
+  reason=$(jq -rn --arg s "$reason" 'if ($s | length) > 500 then ($s[0:500] + "…") else $s end')
+  if [ -n "${GITHUB_RUN_ID:-}" ]; then
+    link=$(printf '\n\n[レビューの全文はこの実行の成果物にあります](%s/%s/actions/runs/%s)' \
+      "${GITHUB_SERVER_URL:-https://github.com}" "${GITHUB_REPOSITORY:-}" "$GITHUB_RUN_ID")
+  fi
+  body=$(printf '%s によるレビューの結果、この更新は取り込まずクローズします。\n\n**理由**: %s\n\n判断が誤っている場合は PR を reopen してください。' \
+    "$MODEL" "$reason")
+  printf '%s%s' "$body" "$link"
+}
+
 # 評決を読む。ファイルが無い / 壊れている / verdict が MERGE|HOLD でない場合は
 # ERROR を返す。ERROR は「調べていない」であって「問題なし」ではないので、
 # その PR には一切手を触れない。
@@ -124,7 +139,7 @@ for pr in "${numbers[@]}"; do
         log "  [dry-run] クローズしない"
         record "$verdict_json" "dry-run"
       else
-        gh pr comment "$pr" --body "$(printf '%s によるレビューの結果、この更新は取り込まずクローズします。\n\n**理由**: %s\n\n判断が誤っている場合は PR を reopen してください。' "$MODEL" "$reason")"
+        gh pr comment "$pr" --body "$(close_comment "$reason")"
         gh pr close "$pr"
         record "$verdict_json" "closed"
       fi
