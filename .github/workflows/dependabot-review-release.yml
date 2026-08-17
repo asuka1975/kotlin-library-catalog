@@ -62,11 +62,16 @@ jobs:
             echo "prs=$(jq -c '[.[].number]' prs.json)"
           } >> "$GITHUB_OUTPUT"
 
+          # ここを `[ "$count" -eq 0 ] && echo ...` と書かないこと。run ブロックの
+          # 最後のコマンドになるため、PR が 1 件以上あると偽 -> 終了ステータス 1 で
+          # ステップが失敗する。
           {
             echo "## 対象の PR: ${count} 件"
             echo
             jq -r '.[] | "- [#\(.number)](\(.url)) \(.title)"' prs.json
-            [ "$count" -eq 0 ] && echo "更新 PR はありません。バージョンも上げません。"
+            if [ "$count" -eq 0 ]; then
+              echo "更新 PR はありません。バージョンも上げません。"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
