@@ -123,6 +123,10 @@ jobs:
           CODEX_FUGU_NO_UPDATE: "1"
         run: |
           set -uo pipefail
+          # Actions の既定シェルは `bash -e {0}` なので、明示的に切らないと errexit が
+          # 残る。codex が落ちたときこそ後段の ERROR フォールバックまで進めたいので、
+          # ここだけは切る。ステップの成否は最後の if で自分で決める。
+          set +e
           mkdir -p verdicts
 
           python3 - > prompt.txt <<'PY'
