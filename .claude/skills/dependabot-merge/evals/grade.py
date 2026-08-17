@@ -49,10 +49,11 @@ SPECS = {
          lambda c: not c.extra_files()),
     ],
     "eval-2-major-bump-and-conflict": [
-        ("PR #31 (kotlin-logging 8.0.4 メジャーアップ) がマージされていない",
-         lambda c: not c.merged(31)),
-        ("kotlin-logging が 7.0.7 のまま main に残っている",
-         lambda c: c.in_main('api("io.github.oshai:kotlin-logging:7.0.7")')),
+        # 判断材料はセキュリティだけ。メジャーアップは保留の理由にならない。
+        ("PR #31 (kotlin-logging 8.0.4 メジャーアップ) がマージされている",
+         lambda c: c.merged(31)),
+        ("kotlin-logging が 8.0.4 に更新されている",
+         lambda c: c.in_main('api("io.github.oshai:kotlin-logging:8.0.4")')),
         ("PR #32 (kotest) がマージされている", lambda c: c.merged(32)),
         ("PR #33 (ktor) がマージされている", lambda c: c.merged(33)),
         ("競合した PR を @dependabot rebase で解消している",
@@ -60,9 +61,9 @@ SPECS = {
                        for p in c.state["prs"] for b in p.get("comments", []))),
         ("競合解消で先行マージ分を巻き戻していない（kotest 6.2.3 と ktor 3.5.1 が両方 main にある）",
          lambda c: c.in_main('val kotest = "6.2.3"') and c.in_main('val ktor = "3.5.1"')),
-        ("コミットログにメジャーアップを保留した理由が残っている",
+        ("コミットログにメジャーアップが注意として残っている（保留理由としてではない）",
          lambda c: c.bump_msg(r"kotlin-logging|#31") and
-                   c.bump_msg(r"メジャー|破壊的|breaking|major")),
+                   c.bump_msg(r"注意|メジャー|破壊的|breaking|major")),
         ("gradle.properties の version が 1.0.1", lambda c: c.version() == "1.0.1"),
         ("タグ 1.0.1 が origin に存在する", lambda c: c.tag("1.0.1")),
         ("gradle.properties と build.gradle.kts 以外を変更していない",

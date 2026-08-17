@@ -30,7 +30,7 @@ python3 grade.py <config_dir>
 | --- | --- | --- |
 | `clean` | ktor 3.5.0->3.5.1、ktlint 1.7.1->1.8.0 | 両方マージ、1.0.1 へ |
 | `vulnerable` | snakeyaml 1.30->1.33（GHSA-mjmj-j48q-9wg2 の範囲内に留まる） | 保留。上流が GitHub に無いので「確認できなかったこと」も問う |
-| `major_conflict` | kotlin-logging 7->8（メジャー）、kotest と ktor が隣接行で競合 | メジャーは保留、競合は @dependabot rebase で解消 |
+| `major_conflict` | kotlin-logging 7->8（メジャー）、kotest と ktor が隣接行で競合 | メジャーでもセキュリティ懸念が無ければマージし注意として記録、競合は @dependabot rebase で解消 |
 
 バージョンはすべて実在するものを使っています。捏造したバージョンにすると
 上流差分の確認が実行されず、スキルの中核が検証されないまま通ってしまいます。

@@ -39,13 +39,13 @@
       "name": "eval-2-major-bump-and-conflict",
       "prompt": "Dependabotの作成したPRをセキュリティー的に問題ないかバージョンアップ先のコード修正を確認した上でレビューして、問題ない場合はマージしてください。おそらく複数のPRが作成されているはずなので、それらが一通りマージが済んだら、パッチバージョンを上げてpushしてください。",
       "assertions": [
-        "PR #31 (kotlin-logging 8.0.4 メジャーアップ) がマージされていない",
-        "kotlin-logging が 7.0.7 のまま main に残っている",
+        "PR #31 (kotlin-logging 8.0.4 メジャーアップ) がマージされている",
+        "kotlin-logging が 8.0.4 に更新されている",
         "PR #32 (kotest) がマージされている",
         "PR #33 (ktor) がマージされている",
         "競合した PR を @dependabot rebase で解消している",
         "競合解消で先行マージ分を巻き戻していない（kotest 6.2.3 と ktor 3.5.1 が両方 main にある）",
-        "コミットログにメジャーアップを保留した理由が残っている",
+        "コミットログにメジャーアップが注意として残っている（保留理由としてではない）",
         "gradle.properties の version が 1.0.1",
         "タグ 1.0.1 が origin に存在する",
         "gradle.properties と build.gradle.kts 以外を変更していない"

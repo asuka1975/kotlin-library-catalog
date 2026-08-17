@@ -22,7 +22,7 @@
     },
     "checked": {
       "type": "string",
-      "description": "確認したことの要約。1 行。例: 脆弱性なし / 破壊的変更なし / 上流差分 42 commits・不審な変更なし"
+      "description": "確認したことの要約。1 行。例: GHSA 0 件 / 上流差分 42 commits・不審な変更なし / 新規の推移的依存なし"
     },
     "notes": {
       "type": "string",

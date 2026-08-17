@@ -71,7 +71,8 @@ SCENARIOS = {
                      "See full diff in compare view\n</details>\n"},
         ],
     },
-    # kotlin-logging 7 -> 8 はメジャーアップなので保留。kotest と ktor は隣接行なので
+    # kotlin-logging 7 -> 8 はメジャーアップだがセキュリティ懸念は無いのでマージ対象。
+    # 判断材料に混ぜず注意として記録できるかを問う。kotest と ktor は隣接行なので
     # 片方をマージすると他方が競合し、@dependabot rebase が要る。
     "major_conflict": {
         "seed": [('val ktor = "3.5.1"', 'val ktor = "3.5.0"'),
