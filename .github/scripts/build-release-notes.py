@@ -44,7 +44,7 @@ def main():
     ap.add_argument("--out", required=True)
     # どのモデルが判断したかは記録の一部。後からモデルを変えたとき、過去のコミットが
     # 何にレビューされたのか分からなくなるので、実際に使った名前をそのまま残す。
-    ap.add_argument("--model", default=os.environ.get("FUGU_MODEL", "Fugu"))
+    ap.add_argument("--model", default=os.environ.get("CLAUDE_MODEL", "Claude"))
     args = ap.parse_args()
 
     with open(args.results, encoding="utf-8") as f:
@@ -90,7 +90,7 @@ def main():
         "",
         "\n".join(unverified) if unverified else "なし",
         "",
-        f"レビューは codex-fugu ({args.model}) が PR ごとに実行しました。",
+        f"レビューは Claude Code Action ({args.model}) が PR ごとに実行しました。",
         "",
     ])
 

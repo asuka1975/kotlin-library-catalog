@@ -1,9 +1,9 @@
 name: Dependabot review and release
 
-# Dependabot が出した更新 PR を Sakana Fugu にレビューさせ、問題なければマージ、
+# Dependabot が出した更新 PR を Claude Code Action にレビューさせ、問題なければマージ、
 # 問題があればクローズし、全部片付いたら README.md の手順でリリースする。
-# モデルは下の FUGU_MODEL 一箇所で決まり、PR コメントとリリースコミットの記録にも
-# そこから流れる。切り替えるときは FUGU_MODEL だけ書き換えればよい。
+# モデルは下の CLAUDE_MODEL 一箇所で決まり、PR コメントとリリースコミットの記録にも
+# そこから流れる。切り替えるときは CLAUDE_MODEL だけ書き換えればよい。
 #
 # 権限の配り方がこのワークフローの要点。レビューするモデルが読むのは PR 本文に
 # 埋め込まれた上流のリリースノート、つまり攻撃者が書ける文章である。それを読んだ
@@ -31,9 +31,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # fugu-cyber は従量課金なので使わない。セキュリティ特化ではないぶん、
-  # レビュー手順は .github/scripts/review-prompt.md 側で明示的に指示している。
-  FUGU_MODEL: fugu-ultra-v1.1
+  # Claude Code に --model で渡すモデル ID。レビュー手順は
+  # .github/scripts/review-prompt.md 側に書き下してあるので、モデルを変えても変わらない。
+  CLAUDE_MODEL: claude-opus-5-5
 
 jobs:
   collect:
@@ -93,6 +93,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      # Claude API に ID フェデレーションで入るための GitHub OIDC トークンを取るのに使う。
+      # リポジトリへの書き込みは増えない。action はトークン取得用の環境変数を Claude の
+      # プロセスから外しているので、Claude が新たにトークンを取ることはできない。
+      id-token: write
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -104,62 +108,13 @@ jobs:
           # チェックアウトが git config に残す資格情報も渡さない
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: codex-fugu を入れる
+      - name: プロンプトとスキーマを用意する
+        id: prep
         env:
-          SAKANA_API_KEY: ${{ secrets.SAKANA_API_KEY }}
+          PR_NUMBER: ${{ matrix.pr }}
         run: |
           set -euo pipefail
-
-          # Fugu の設定バンドルは Codex のバージョンと完全一致でしか配置されない。
-          # 一致しないとインストーラは --yes の下で Codex を差し替えず、設定も
-          # codex-fugu ランチャも置かないまま、警告だけ出して終了コード 0 で抜ける。
-          # 最新の Codex を入れていた頃は、Fugu の固定先より新しい Codex が npm に
-          # 出た時点から、次の codex-fugu が command not found で落ちていた。
-          #
-          # 固定先を決めているのは Fugu 側なので、先に clone して configs/bundle.sh
-          # から読み、ちょうどそのバージョンを入れる。Fugu が固定先を上げれば、
-          # こちらは何もしなくても追従する。bundle.sh は source しない。取得した
-          # コードをここで実行することになるので、値を読むだけにする。
-          git clone --quiet https://github.com/SakanaAI/fugu.git "$HOME/.fugu"
-          echo "fugu: $(git -C "$HOME/.fugu" log -1 --format='%h %s')"
-          codex_version=$(sed -n 's/^BUNDLE_CODEX_VERSION="\([0-9][0-9.]*\)"$/\1/p' \
-            "$HOME/.fugu/configs/bundle.sh")
-          if ! [[ "$codex_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Fugu の configs/bundle.sh から BUNDLE_CODEX_VERSION を読めなかった（[${codex_version}]）。"
-            exit 1
-          fi
-          npm install -g "@openai/codex@${codex_version}"
-
-          # curl | bash のブートストラップは clone して scripts/install.sh を呼ぶだけ
-          # なので、clone 済みのものを直接呼ぶ。固定先を読んだのと同じツリーの
-          # インストーラが動き、配布サーバ上のブートストラップの中身にも左右されない。
-          bash "$HOME/.fugu/scripts/install.sh" --yes
-
-          # インストーラは設定を配置できなくても 0 で抜ける。成否はここで見る。
-          if ! command -v codex-fugu >/dev/null; then
-            echo "::error::codex-fugu ランチャが置かれていない。入った Codex（$(codex --version 2>/dev/null || echo 不明)）と Fugu の固定先 ${codex_version} の一致を上のログで確認すること。"
-            exit 1
-          fi
-          codex-fugu --status
-
-      - name: レビューする
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SAKANA_API_KEY: ${{ secrets.SAKANA_API_KEY }}
-          PR_NUMBER: ${{ matrix.pr }}
-          CODEX_FUGU_NO_UPDATE: "1"
-        run: |
-          set -uo pipefail
-          # Actions の既定シェルは `bash -e {0}` なので、明示的に切らないと errexit が
-          # 残る。codex が落ちたときこそ後段の ERROR フォールバックまで進めたいので、
-          # ここだけは切る。ステップの成否は最後の if で自分で決める。
-          set +e
-          echo "model: ${FUGU_MODEL}"
-          mkdir -p verdicts
+          echo "model: ${CLAUDE_MODEL}"
 
           python3 - > prompt.txt <<'PY'
           import os, pathlib
@@ -168,45 +123,109 @@ jobs:
                  .replace("{{REPO}}", os.environ["GITHUB_REPOSITORY"]))
           PY
 
-          # ここから先は、上流のソースやリリースノートをそのままログに流す。ランナーは
-          # 標準出力を workflow command として読むので、止めずに流すと、上流に含まれる
-          # `##[add-matcher]...` のような行をランナーが実行しようとして失敗し、
-          # 「調べただけ」でジョブが落ちる。読むものは資料であって指示ではない、という
-          # 話がモデルだけでなくランナーにも要る。
-          #
-          # トークンは実行のたびに変える。固定値だと、上流のファイルに ::トークン:: を
-          # 仕込んでおいて解釈を再開させられる。
+          # 複数行の出力は区切り文字で囲む。区切りは本文と衝突しないよう実行ごとに作る。
+          delim=$(python3 -c 'import uuid; print(uuid.uuid4())')
+          {
+            echo "prompt<<${delim}"
+            cat prompt.txt
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+
+          # claude_args は action の中でシェルと同じ規則で単語に分けられるので、スキーマは
+          # 1 行の JSON にしてシングルクォートで包んで渡す。' が混ざると包めないので止める。
+          schema=$(jq -c . .github/scripts/verdict-schema.json)
+          if [[ "$schema" == *"'"* ]]; then
+            echo "::error::verdict-schema.json に ' が含まれていて claude_args に渡せない。"
+            exit 1
+          fi
+          echo "schema=${schema}" >> "$GITHUB_OUTPUT"
+
+      # Claude に許すのは、claude_args の --allowedTools に並べた読み取り系のコマンドだけ。
+      # PR 本文に埋め込まれた上流のリリースノートは第三者が書ける文章なので、それに
+      # 誘導されて任意のコマンドを走らせられる状態にはしない。--permission-mode dontAsk
+      # なので、並べていないものは確認を待たずに拒否される。拒否されて確かめられなかった
+      # ことは、プロンプトの指示どおり unverified に入る。許すコマンドを変えたら
+      # review-prompt.md の「使えるコマンド」も合わせて直すこと。
+      #
+      # github_token には、このジョブの読み取り専用トークンを必ず渡す。省くと action は
+      # Claude GitHub App のトークンを取りに行く。
+      #
+      # --setting-sources user でリポジトリの .claude/ を読ませないのは、そこにある
+      # dependabot-merge スキルが「マージしてタグを打つ」手順だから。レビュー担当が
+      # 読むと、自分の担当範囲を取り違える。
+      #
+      # 上流のソースやリリースノートはランナーの標準出力に流さない。ランナーは標準出力を
+      # workflow command として読むので、上流に `##[add-matcher]...` のような行が
+      # 含まれていると、ランナーがそれを実行しようとして「調べただけ」でジョブが落ちる。
+      # show_full_output が false の間、action はツールの出力をログに出さず、起動と
+      # 結果の要約だけを出す。show_full_output を true にしないこと（秘密情報も出る）。
+      - name: レビューする
+        id: review
+        # Claude が落ちたときや評決を返さなかったときこそ、次のステップの ERROR
+        # フォールバックまで進めたいので、ここでは止めない。
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Claude API へは ID フェデレーションで入る。GitHub の OIDC トークンを短命の
+          # アクセストークンに交換するので、長期の API キーを Secrets に置かずに済む。
+          # 値は識別子で秘密ではないが、公開リポジトリのファイルやログに組織 ID を
+          # 残さないよう Secrets に置いている（README.md 参照）。anthropic_api_key や
+          # claude_code_oauth_token を併せて渡すとそちらが優先され、フェデレーションは
+          # 使われないので渡さないこと。
+          anthropic_federation_rule_id: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ secrets.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.prep.outputs.prompt }}
+          claude_args: |
+            --model ${{ env.CLAUDE_MODEL }}
+            --json-schema '${{ steps.prep.outputs.schema }}'
+            --setting-sources user
+            --permission-mode dontAsk
+            --allowedTools "Bash(gh pr view:*)"
+            --allowedTools "Bash(gh pr diff:*)"
+            --allowedTools "Bash(gh api:*)"
+            --allowedTools "Bash(gh release view:*)"
+            --allowedTools "Bash(curl -sS https://repo1.maven.org/maven2/:*)"
+            --allowedTools "Bash(grep:*)"
+            --allowedTools "Bash(jq:*)"
+            --allowedTools "Bash(head:*)"
+            --allowedTools "Bash(sort:*)"
+            --allowedTools Read Grep Glob
+          show_full_output: "false"
+          display_report: "false"
+          # PR イベントではないので、インラインコメントを投稿する後処理は要らない
+          classify_inline_comments: "false"
+
+      - name: 評決を書き出す
+        if: ${{ !cancelled() }}
+        env:
+          PR_NUMBER: ${{ matrix.pr }}
+          # モデルが書いた文字列なので、run の本文に式で埋め込まず環境変数で渡す
+          STRUCTURED_OUTPUT: ${{ steps.review.outputs.structured_output }}
+          REVIEW_OUTCOME: ${{ steps.review.outcome }}
+        run: |
+          set -euo pipefail
+          echo "review: ${REVIEW_OUTCOME}"
+          mkdir -p verdicts
+
+          # 評決はモデルが書いた文字列で、上流の文章を引いていることがある。ログに出す
+          # 区間だけ workflow command の解釈を止める。トークンは実行のたびに変える。
+          # 固定値だと、上流のファイルに ::トークン:: を仕込んでおいて解釈を再開させられる。
           STOP=$(python3 -c 'import uuid; print(uuid.uuid4())')
           echo "::stop-commands::${STOP}"
 
-          # サンドボックスを開けているのは、上流の advisory / リリース / タグ間差分を
-          # 引くのにネットワークと gh が要るため。ランナーは使い捨てで、このジョブの
-          # トークンは読み取り専用なので、開けても書き換えられるものが無い。
-          codex-fugu exec \
-            --model "$FUGU_MODEL" \
-            --sandbox danger-full-access \
-            --output-schema .github/scripts/verdict-schema.json \
-            --output-last-message raw-verdict.txt \
-            - < prompt.txt
-
           # 評決が取れなかったときは ERROR にする。ERROR は「調べていない」であって
           # 「問題なし」ではないので、apply ジョブはその PR に触れない。
-          python3 - "$PR_NUMBER" raw-verdict.txt "verdicts/${PR_NUMBER}.json" <<'PY'
-          import json, re, sys
+          python3 - "$PR_NUMBER" "verdicts/${PR_NUMBER}.json" <<'PY'
+          import json, os, sys
 
-          pr, src, dst = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+          pr, dst = int(sys.argv[1]), sys.argv[2]
           try:
-              text = open(src, encoding="utf-8").read()
-          except OSError:
-              text = ""
-
-          data = None
-          for candidate in (text.strip(), *(m.group(0) for m in re.finditer(r"\{.*\}", text, re.S))):
-              try:
-                  data = json.loads(candidate)
-                  break
-              except (json.JSONDecodeError, ValueError):
-                  continue
+              data = json.loads(os.environ.get("STRUCTURED_OUTPUT") or "null")
+          except (json.JSONDecodeError, ValueError):
+              data = None
 
           if not isinstance(data, dict) or data.get("verdict") not in ("MERGE", "HOLD"):
               data = {
@@ -343,7 +362,7 @@ jobs:
           ./gradlew --no-daemon build publishToMavenLocal
 
           python3 .github/scripts/build-release-notes.py \
-            --results results.jsonl --version "$version" --model "$FUGU_MODEL" \
+            --results results.jsonl --version "$version" --model "$CLAUDE_MODEL" \
             --out release-notes.txt
 
           git add gradle.properties

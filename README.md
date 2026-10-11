@@ -66,7 +66,8 @@ SUM=$(curl -sSL https://services.gradle.org/distributions/gradle-<version>-bin.z
 Dependabot が月曜 09:00 に PR を作る 15 時間後です（GitHub の cron は UTC 固定なので、
 ファイル上は `0 15 * * 1` と書いてあります）。
 
-開いている Dependabot PR ごとに、Sakana Fugu の `fugu-ultra-v1.1` を `codex-fugu` 経由で
+開いている Dependabot PR ごとに、Claude Opus 5.5（`claude-opus-5-5`）を
+[Claude Code Action](https://github.com/anthropics/claude-code-action) 経由で
 走らせ、既知の脆弱性・上流のリリースノート・上流のタグ間差分を確認させます。評決が `MERGE` なら
 ブランチをビルドしてからマージ、`HOLD` なら理由をコメントしてクローズします。1 件でも
 マージできたらパッチバージョンを上げ、レビュー内容をコミットメッセージに入れてタグを
@@ -78,20 +79,31 @@ push します（タグを push して初めて JitPack がビルドします）
 気づいた非互換はリリースコミットの「確認したこと」欄に `注意:` として併記されるので、
 BOM を上げる側はそこを見てください。
 
-使うモデルはワークフローの `env.FUGU_MODEL` 一箇所で決まります。PR のクローズ理由の
+使うモデルはワークフローの `env.CLAUDE_MODEL` 一箇所で決まります。PR のクローズ理由の
 コメントにも、リリースコミットの記録にもそこから流れるので、切り替えるときはこの 1 行
-だけ書き換えてください。セキュリティ特化の `fugu-cyber` は従量課金で、かつ別途アクセス
-申請が要るため使っていません。確認すべき観点は `.github/scripts/review-prompt.md` 側に
+だけ書き換えてください。確認すべき観点は `.github/scripts/review-prompt.md` 側に
 書き下してあるので、モデルを変えても手順は変わりません。
 
 レビューするモデルには**書き込み権限を渡していません**。モデルが読むのは PR 本文に
 埋め込まれた上流のリリースノート、つまり第三者が書ける文章です。それを読んだ
 エージェント自身がマージまでできると、このワークフローが防ごうとしている攻撃が
 そのまま通ります。ジョブを分け、レビュー側のトークンを読み取り専用にしてあります。
+実行できるコマンドも `gh` の参照系・Maven Central からの `curl`・出力の絞り込みだけに
+限っていて（ワークフローの `--allowedTools`）、それ以外は確認なしで拒否されます。
+許すコマンドを変えるときは、`review-prompt.md` の「使えるコマンド」も合わせて直してください。
 
-動かすのに必要な設定は次の 2 つです。
+動かすのに必要な設定は次の 3 つです。
 
-- リポジトリの Secrets に `SAKANA_API_KEY` を登録する
+- Claude Console で ID フェデレーション（Workload Identity Federation）を設定する
+  （次の節）
+- リポジトリの Secrets（Settings > Secrets and variables > Actions > Secrets）に、
+  Console で作った ID を登録する。識別子で秘密ではないが、公開リポジトリのログに
+  組織 ID が出ないよう Secrets に置いている
+  - `ANTHROPIC_FEDERATION_RULE_ID`: フェデレーションルールの ID（`fdrl_...`）
+  - `ANTHROPIC_ORGANIZATION_ID`: 組織 ID（Console の Settings > Organization）
+  - `ANTHROPIC_SERVICE_ACCOUNT_ID`: ルールの対象のサービスアカウント ID（`svac_...`）
+  - `ANTHROPIC_WORKSPACE_ID`: ワークスペース ID（`wrkspc_...`）。ルールが 1 つの
+    ワークスペースだけを対象にしているなら不要
 - Settings > Actions > General > Workflow permissions が
   「Read repository contents and packages permissions」に絞られていないこと
   （ワークフロー側で `permissions:` を宣言しているので、この既定値のままで動きます。
@@ -105,6 +117,53 @@ bot を除外するか、保護を外してください。
 
 評決が取れなかった PR（API 障害、出力が壊れた、ジョブが落ちた）は**触りません**。
 「調べていない」は「問題なし」ではないので、open のまま残して次回に回します。
+
+### Claude API の認証（ID フェデレーション）
+
+API キーを Secrets に置かず、ジョブが GitHub から受け取る OIDC トークンを、Claude API の
+短命なアクセストークンに交換して使います。漏れて困る長期の秘密がリポジトリに無く、
+ローテーションも要りません。課金は Claude Console の組織に対する API の従量課金です
+（Claude の Pro / Max プランの利用枠では動きません）。
+
+Claude Console の Settings > Workload identity で Connect workload を選び、GitHub Actions
+のタイルから作ります。発行者は `https://token.actions.githubusercontent.com` で、
+ウィザードが埋めてくれます。フェデレーションルールの一致条件は次のとおりにします。
+
+| 項目 | 値 |
+| --- | --- |
+| subject（`subject_prefix`） | `repo:asuka1975@39215088/kotlin-library-catalog@1314453069:*` |
+| audience | `https://api.anthropic.com` |
+| claims | `ref` = `refs/heads/main` |
+| claims | `job_workflow_ref` = `asuka1975/kotlin-library-catalog/.github/workflows/dependabot-review-release.yml@refs/heads/main` |
+
+スコープはウィザード既定の `workspace:developer`、トークンの有効期間は既定の 600 秒の
+ままで構いません。action が GitHub の OIDC トークンを更新し続けるので、レビューが長引いても
+アクセストークンは期限ごとに交換し直されます。
+
+subject がよく見る `repo:<owner>/<repo>:...` の形でないのは、このリポジトリの OIDC
+トークンがオーナーとリポジトリの不変 ID を含む subject を使う設定（`use_immutable_subject`）
+になっているためです。今の形式は次で確かめられます。
+
+```bash
+gh api repos/asuka1975/kotlin-library-catalog/actions/oidc/customization/sub
+```
+
+ここがずれると交換は 401 で拒否され、Console の認証履歴に `match_subject_prefix` と
+残ります。
+
+subject は前方一致でリポジトリを不変 ID で押さえるだけにし、ブランチとワークフローは
+claims で絞っています。subject の末尾はイベントの種類で変わる（`ref:...` /
+`pull_request` など）ので、そこに依存しない形にしてあります。
+
+ルールは main 上のこのワークフローだけに絞ってあります。定期実行は main で動くので
+これで足り、fork からの PR やほかのブランチ・ワークフローではトークンを取れません。
+手動実行もブランチに main を選んだときだけ通ります。ブランチでワークフローを試すと
+認証で落ち、全 PR が ERROR（触らない）になります。ワークフローのファイル名を変えたら
+`job_workflow_ref` も直してください。
+
+以前使っていた Secrets の `SAKANA_API_KEY` はもう使わないので、削除して構いません。
+`ANTHROPIC_API_KEY` などの静的な認証情報を action に併せて渡すとそちらが優先され、
+フェデレーションが使われなくなるので、ワークフローには足さないでください。
 
 ## ローカルで確認する
 
