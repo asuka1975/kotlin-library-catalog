@@ -66,10 +66,9 @@ SUM=$(curl -sSL https://services.gradle.org/distributions/gradle-<version>-bin.z
 Dependabot が月曜 09:00 に PR を作る 15 時間後です（GitHub の cron は UTC 固定なので、
 ファイル上は `0 15 * * 1` と書いてあります）。
 
-開いている Dependabot PR ごとに、Claude Opus 5.5（`claude-opus-5-5`）を
-[Claude Code Action](https://github.com/anthropics/claude-code-action) 経由で
-走らせ、既知の脆弱性・上流のリリースノート・上流のタグ間差分を確認させます。評決が `MERGE` なら
-ブランチをビルドしてからマージ、`HOLD` なら理由をコメントしてクローズします。1 件でも
+開いている Dependabot PR ごとに、Claude Opus 5.5（`claude-opus-5-5`）を Claude Code の
+CLI で走らせ、既知の脆弱性・上流のリリースノート・上流のタグ間差分を確認させます。
+評決が `MERGE` ならブランチをビルドしてからマージ、`HOLD` なら理由をコメントしてクローズします。1 件でも
 マージできたらパッチバージョンを上げ、レビュー内容をコミットメッセージに入れてタグを
 push します（タグを push して初めて JitPack がビルドします）。
 
@@ -83,6 +82,14 @@ BOM を上げる側はそこを見てください。
 コメントにも、リリースコミットの記録にもそこから流れるので、切り替えるときはこの 1 行
 だけ書き換えてください。確認すべき観点は `.github/scripts/review-prompt.md` 側に
 書き下してあるので、モデルを変えても手順は変わりません。
+
+[Claude Code Action](https://github.com/anthropics/claude-code-action) は使わず、
+ワークフローの中で Claude Code の CLI を直接動かしています。アクション経由の呼び出し
+だけが、残高があっても `Credit balance is too low` で拒否される不具合があるためです
+（anthropics/claude-code-action#1888）。CLI のバージョンはワークフローの
+`env.CLAUDE_CODE_VERSION` で固定していて、Dependabot は追わないので、上げるときは手で
+書き換えてください。アクションに戻すときの注意は、ワークフロー冒頭のコメントに
+あります。
 
 レビューするモデルには**書き込み権限を渡していません**。モデルが読むのは PR 本文に
 埋め込まれた上流のリリースノート、つまり第三者が書ける文章です。それを読んだ
@@ -117,6 +124,9 @@ bot を除外するか、保護を外してください。
 
 評決が取れなかった PR（API 障害、出力が壊れた、ジョブが落ちた）は**触りません**。
 「調べていない」は「問題なし」ではないので、open のまま残して次回に回します。
+評決は ERROR になり、API で落ちた回は理由に API エラーの種類と HTTP ステータスが
+残ります（`authentication_failed / HTTP 401 / ...`、`billing_error / HTTP 400 / ...` など）。
+ジョブの Summary か成果物の `verdict-<PR 番号>` で見られます。
 
 ### Claude API の認証（ID フェデレーション）
 
@@ -137,8 +147,14 @@ Claude Console の Settings > Workload identity で Connect workload を選び�
 | claims | `job_workflow_ref` = `asuka1975/kotlin-library-catalog/.github/workflows/dependabot-review-release.yml@refs/heads/main` |
 
 スコープはウィザード既定の `workspace:developer`、トークンの有効期間は既定の 600 秒の
-ままで構いません。action が GitHub の OIDC トークンを更新し続けるので、レビューが長引いても
-アクセストークンは期限ごとに交換し直されます。
+ままで構いません。ワークフローが GitHub の OIDC トークンを 1 分おきに取り直すので、
+レビューが長引いてもアクセストークンは期限ごとに交換し直されます。
+
+claims には、この 2 つ以外を足さないでください。とくに `event_name` は入れては
+いけません。このワークフローは手動実行では `workflow_dispatch`、定期実行では
+`schedule` になるので、どちらの値にしても片方で落ちます。手動実行の dry run が通っても、
+定期実行で通る保証にはなりません。値は文字列として完全に一致する必要があり、
+大文字小文字や前後の空白が違っても一致しません。
 
 subject がよく見る `repo:<owner>/<repo>:...` の形でないのは、このリポジトリの OIDC
 トークンがオーナーとリポジトリの不変 ID を含む subject を使う設定（`use_immutable_subject`）
@@ -161,9 +177,21 @@ claims で絞っています。subject の末尾はイベントの種類で変�
 認証で落ち、全 PR が ERROR（触らない）になります。ワークフローのファイル名を変えたら
 `job_workflow_ref` も直してください。
 
+交換が拒否されると、レビューは ERROR（PR には触らない）になり、理由に
+`authentication_failed / HTTP 401 / ...` と出ます。401 の応答には、どの条件が合わなかった
+かは書かれません。推測で直す前に、Console の Settings > Workload identity にある
+認証履歴を見てください。照合したトークンのクレームの実際の値と、拒否理由が残って
+います。`match_subject_prefix` なら subject、`match_claim_value_mismatch` なら claims が、
+トークンの中身と合っていません。
+
+Console で Connect workload をやり直すと、ルール（`fdrl_...`）とサービスアカウント
+（`svac_...`）が新しく作られます。やり直したら Secrets の 4 つを見直してください。
+新しく作ったサービスアカウントが自動で入るのは Default ワークスペースだけなので、
+`ANTHROPIC_WORKSPACE_ID` のワークスペースを使うなら、そのメンバーに足してください。
+
 以前使っていた Secrets の `SAKANA_API_KEY` はもう使わないので、削除して構いません。
-`ANTHROPIC_API_KEY` などの静的な認証情報を action に併せて渡すとそちらが優先され、
-フェデレーションが使われなくなるので、ワークフローには足さないでください。
+`ANTHROPIC_API_KEY` などの静的な認証情報をワークフローに足すとそちらが優先され、
+フェデレーションが使われなくなるので、足さないでください。
 
 ## ローカルで確認する
 

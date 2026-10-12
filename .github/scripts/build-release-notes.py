@@ -90,7 +90,7 @@ def main():
         "",
         "\n".join(unverified) if unverified else "なし",
         "",
-        f"レビューは Claude Code Action ({args.model}) が PR ごとに実行しました。",
+        f"レビューは Claude Code ({args.model}) が PR ごとに実行しました。",
         "",
     ])
 
