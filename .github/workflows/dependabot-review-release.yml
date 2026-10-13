@@ -259,7 +259,7 @@ jobs:
               --permission-mode dontAsk \
               --no-session-persistence \
               --output-format stream-json --verbose \
-              --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(gh release view:*),Bash(curl -sS https://repo1.maven.org/maven2/:*),Bash(grep:*),Bash(jq:*),Bash(head:*),Bash(sort:*),Read,Grep,Glob" \
+              --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(gh release view:*),Bash(curl -sS https://repo1.maven.org/maven2/:*),Bash(curl -sSL https://services.gradle.org/distributions/:*),Bash(grep:*),Bash(jq:*),Bash(head:*),Bash(sort:*),Bash(sha256sum:*),Read,Grep,Glob" \
               < "$work/prompt.txt" > "$work/output.jsonl" || status=$?
 
           jq -c 'select(.type == "result")

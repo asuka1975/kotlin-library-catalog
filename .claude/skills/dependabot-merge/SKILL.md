@@ -105,6 +105,22 @@ Agent ツールで `model: "opus"`、`subagent_type: "general-purpose"` を指�
 BOM の更新（spring-boot-dependencies など）は上流の全差分を読むのが非現実的なので、
 代わりに管理バージョンの差分を取ること。新旧の POM を取得して <properties> を比べる。
 
+Gradle Wrapper の更新（gradle/wrapper/ を書き換える PR）では、加えて wrapper jar と
+配布物が Gradle 公式のものと一致するかを確かめること。wrapper jar はバイナリなので
+差分からは中身が読めず、しかもビルドのたびに（JitPack でも）実行される。公式の
+チェックサムとの照合が、すり替えを見つける唯一の手段。
+   gh pr view <番号> --json headRefOid --jq .headRefOid
+   gh api "repos/asuka1975/kotlin-library-catalog/contents/gradle/wrapper/gradle-wrapper.jar?ref=<headRefOid>" \
+     -H "Accept: application/vnd.github.raw" | sha256sum
+   curl -sSL https://services.gradle.org/distributions/gradle-<新バージョン>-wrapper.jar.sha256
+   curl -sSL https://services.gradle.org/distributions/gradle-<新バージョン>-bin.zip.sha256
+- PR の gradle-wrapper.jar の SHA-256 が、公式の -wrapper.jar.sha256 と一致すること
+- gradle-wrapper.properties の distributionUrl が https\://services.gradle.org/distributions/
+  のままであること
+- distributionSha256Sum が、distributionUrl の配布物の公式の値（-bin.zip なら
+  -bin.zip.sha256、-all.zip なら -all.zip.sha256）と一致すること
+照合した値は DETAIL に残すこと。
+
 最後に、必ずこの形式で終えてください。
 
 VERDICT: MERGE または HOLD
@@ -123,6 +139,8 @@ HOLD にするのは次のいずれかに当てはまるときだけ。
 - 悪意を疑う痕跡がある（難読化、外部への通信の追加、ビルド時に走る新しいスクリプト、
   配布元・リポジトリ URL の差し替え、素性の分からないコミット作者 など）
 - リリースノートも上流差分も確認できず、セキュリティ上の疑いを晴らせない
+- Gradle Wrapper の更新で、wrapper jar か配布物のチェックサムが公式と一致しない、
+  または照合できない
 
 セキュリティ上の疑いが晴れないなら HOLD。マージは後からできるが、悪意あるコードを
 入れてから追うのは高くつく。逆に、セキュリティ上の懸念が無いなら MERGE。互換性を
@@ -220,7 +238,7 @@ Bump version to <新バージョン>
 
 ## 確認できなかったこと
 
-- #12: gradle-wrapper.jar はバイナリのため中身は未検証
+- #12: 上流差分は 42 commits のうち、ビルドスクリプトと依存の変更だけを確認
 - #15: 上流が bitbucket でタグ間差分は取得できていない
 EOF
 
