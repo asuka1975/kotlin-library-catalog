@@ -31,6 +31,7 @@ Dependabot の PR はほぼ全て、この 1 ファイルの 1〜数行を書き
 - `gh pr view` / `gh pr diff` / `gh api` / `gh release view`
 - `curl -sS https://repo1.maven.org/maven2/...`（Maven Central からの取得だけ。オプションもこの形で）
 - `curl -sSL https://services.gradle.org/distributions/...`（Gradle 公式のチェックサム `.sha256` の取得だけ。オプションもこの形で）
+  - `curl` の URL は引用符で囲まずに書いてください。囲むと形が一致せず拒否されます。
 - 出力を絞り込む `grep` / `jq` / `head` / `sort`、ハッシュを取る `sha256sum`（上のコマンドにパイプで繋げてよい）
 - リポジトリ内のファイルを読むこと
 

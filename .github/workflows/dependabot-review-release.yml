@@ -250,6 +250,10 @@ jobs:
 
           # --allowedTools は値を複数取るので最後に置く。後ろに引数があると飲み込まれる。
           # 一覧はカンマ区切りで 1 つの引数にまとめる。
+          #
+          # URL を含むルールは `前置き:*` ではなく `前置き*` で書くこと。前置きに `:`
+          # （https:// の）が入っていると `:*` の形は一致せず、確認なしで拒否される
+          # （Claude Code 2.1.296 で確認）。
           status=0
           env -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN \
             claude -p \
@@ -259,7 +263,7 @@ jobs:
               --permission-mode dontAsk \
               --no-session-persistence \
               --output-format stream-json --verbose \
-              --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(gh release view:*),Bash(curl -sS https://repo1.maven.org/maven2/:*),Bash(curl -sSL https://services.gradle.org/distributions/:*),Bash(grep:*),Bash(jq:*),Bash(head:*),Bash(sort:*),Bash(sha256sum:*),Read,Grep,Glob" \
+              --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(gh release view:*),Bash(curl -sS https://repo1.maven.org/maven2/*),Bash(curl -sSL https://services.gradle.org/distributions/*),Bash(grep:*),Bash(jq:*),Bash(head:*),Bash(sort:*),Bash(sha256sum:*),Read,Grep,Glob" \
               < "$work/prompt.txt" > "$work/output.jsonl" || status=$?
 
           jq -c 'select(.type == "result")
