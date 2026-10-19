@@ -11,7 +11,7 @@ System.getenv("VERSION")?.takeIf { it.isNotBlank() }?.let { version = it }
 // バージョンを共有するライブラリ群
 val springBoot = "4.1.1"
 val ktor = "3.6.0"
-val kotest = "6.2.5"
+val kotest = "6.2.6"
 val detekt = "1.23.8"
 val ktlint = "1.8.0"
 
