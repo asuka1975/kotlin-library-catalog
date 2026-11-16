@@ -58,7 +58,7 @@ dependencies {
         // ロギング
         // logback-classic / slf4j-api は Spring Boot 側の管理に任せる
         // （Spring Boot はログ統合が logback のバージョンに依存するため）
-        api("io.github.oshai:kotlin-logging:8.0.4")
+        api("io.github.oshai:kotlin-logging:8.0.7")
     }
 }
 
