@@ -44,7 +44,7 @@ dependencies {
         api("io.kotest:kotest-runner-junit5:$kotest")
         api("io.kotest:kotest-assertions-core:$kotest")
         api("io.kotest:kotest-property:$kotest")
-        api("io.mockk:mockk:1.14.11")
+        api("io.mockk:mockk:1.14.12")
 
         // 静的解析 / フォーマッタ
         // detekt-formatting は detektPlugins 構成で使う
